@@ -1,6 +1,144 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost } from './api';
 
+function AdminLogin({ onLoggedIn }) {
+  const [form, setForm] = useState({ adminId: '', email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const body = form.adminId ? { adminId: form.adminId, password: form.password } : { email: form.email, password: form.password };
+      const me = await apiPost('/admin/login', body);
+      onLoggedIn(me);
+    } catch (e) {
+      setError(parseError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="card" style={{ maxWidth: 480, margin: '2rem auto' }}>
+      <h2>Admin Login</h2>
+      <p className="muted">Login with Admin ID or Gmail + password</p>
+      <form className="form" onSubmit={onSubmit}>
+        <div className="grid-2">
+          <div>
+            <label>Admin ID</label>
+            <input
+              value={form.adminId}
+              onChange={(e) => setForm({ ...form, adminId: e.target.value })}
+              placeholder="admin123"
+            />
+          </div>
+          <div>
+            <label>Gmail</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="name@gmail.com"
+            />
+          </div>
+        </div>
+        <div>
+          <label>Password</label>
+          <input
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            placeholder="••••••"
+            required
+            minLength={6}
+          />
+        </div>
+        <button className="btn" disabled={loading}>{loading ? 'Logging in…' : 'Login'}</button>
+      </form>
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
+
+function AdminSignup({ onSignedUp }) {
+  const [form, setForm] = useState({ adminId: '', email: '', password: '', instituteName: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const me = await apiPost('/admin/signup', form);
+      onSignedUp(me);
+    } catch (e) {
+      setError(parseError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="card" style={{ maxWidth: 560, margin: '2rem auto' }}>
+      <h2>Create Admin Account</h2>
+      <p className="muted">Use a Gmail address. Password must be at least 6 characters.</p>
+      <form className="form" onSubmit={onSubmit}>
+        <div className="grid-2">
+          <div>
+            <label>Admin ID</label>
+            <input
+              value={form.adminId}
+              onChange={(e) => setForm({ ...form, adminId: e.target.value })}
+              placeholder="admin123"
+              required
+              minLength={3}
+            />
+          </div>
+          <div>
+            <label>Institute Name</label>
+            <input
+              value={form.instituteName}
+              onChange={(e) => setForm({ ...form, instituteName: e.target.value })}
+              placeholder="My College"
+              required
+              minLength={2}
+            />
+          </div>
+        </div>
+        <div className="grid-2">
+          <div>
+            <label>Gmail</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="name@gmail.com"
+              required
+            />
+          </div>
+          <div>
+            <label>Password</label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="••••••"
+              required
+              minLength={6}
+            />
+          </div>
+        </div>
+        <button className="btn" disabled={loading}>{loading ? 'Creating…' : 'Create Account'}</button>
+      </form>
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
+
 function StudentsSection() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -229,15 +367,75 @@ function formatDate(d) {
 }
 
 export default function App() {
+  const [admin, setAdmin] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [showSignup, setShowSignup] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const me = await apiGet('/admin/me');
+        if (mounted) setAdmin(me);
+      } catch (_) {
+        if (mounted) setAdmin(null);
+      } finally {
+        if (mounted) setAuthLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const logout = async () => {
+    try {
+      await apiPost('/admin/logout', {});
+    } catch (_) {}
+    setAdmin(null);
+  };
+
   return (
     <div className="container">
       <header>
         <h1>Student Check-In Dashboard</h1>
+        {admin && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <span className="muted">Institute: {admin.instituteName}</span>
+            <button className="btn" style={{ marginLeft: 12 }} onClick={logout}>Logout</button>
+          </div>
+        )}
       </header>
-      <main className="grid">
-        <StudentsSection />
-        <CheckinsSection />
-      </main>
+      {authLoading ? (
+        <main>
+          <p className="muted">Checking session…</p>
+        </main>
+      ) : !admin ? (
+        <main>
+          {showSignup ? (
+            <>
+              <AdminSignup onSignedUp={setAdmin} />
+              <p className="muted" style={{ textAlign: 'center' }}>
+                Already have an account?{' '}
+                <a href="#" onClick={(e) => { e.preventDefault(); setShowSignup(false); }}>Login</a>
+              </p>
+            </>
+          ) : (
+            <>
+              <AdminLogin onLoggedIn={setAdmin} />
+              <p className="muted" style={{ textAlign: 'center' }}>
+                New here?{' '}
+                <a href="#" onClick={(e) => { e.preventDefault(); setShowSignup(true); }}>Create an account</a>
+              </p>
+            </>
+          )}
+          {authError && <p className="error">{authError}</p>}
+        </main>
+      ) : (
+        <main className="grid">
+          <StudentsSection />
+          <CheckinsSection />
+        </main>
+      )}
       <footer>
         <span className="muted">Powered by Express + MongoDB</span>
       </footer>

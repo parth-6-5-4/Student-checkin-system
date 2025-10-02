@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import { Student } from '../models/Student.js';
+import { authRequired } from '../middleware/auth.js';
 
 const router = Router();
 
 router.post(
   '/',
+  authRequired,
   [
     body('name').isString().trim().isLength({ min: 2, max: 100 }),
     body('email').isEmail().normalizeEmail(),
@@ -18,7 +20,9 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
       const { name, email, studentId } = req.body;
-      const student = await Student.create({ name, email, studentId });
+      const institute = req.admin?.instituteName;
+      if (!institute) return res.status(401).json({ message: 'Unauthorized' });
+      const student = await Student.create({ name, email, studentId, institute });
       return res.status(201).json(student);
     } catch (err) {
       if (err && err.code === 11000) {
@@ -30,9 +34,10 @@ router.post(
   }
 );
 
-router.get('/', async (req, res, next) => {
+router.get('/', authRequired, async (req, res, next) => {
   try {
-    const students = await Student.find().lean();
+    const institute = req.admin?.instituteName;
+    const students = await Student.find({ institute }).lean();
     res.json(students);
   } catch (err) {
     next(err);
