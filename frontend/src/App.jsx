@@ -1,143 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Link, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { apiGet, apiPost } from './api';
+import Login from './pages/Login.jsx';
+import Signup from './pages/Signup.jsx';
+import { formatDate, parseError } from './util';
 
-function AdminLogin({ onLoggedIn }) {
-  const [form, setForm] = useState({ adminId: '', email: '', password: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const body = form.adminId ? { adminId: form.adminId, password: form.password } : { email: form.email, password: form.password };
-      const me = await apiPost('/admin/login', body);
-      onLoggedIn(me);
-    } catch (e) {
-      setError(parseError(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <section className="card" style={{ maxWidth: 480, margin: '2rem auto' }}>
-      <h2>Admin Login</h2>
-      <p className="muted">Login with Admin ID or Gmail + password</p>
-      <form className="form" onSubmit={onSubmit}>
-        <div className="grid-2">
-          <div>
-            <label>Admin ID</label>
-            <input
-              value={form.adminId}
-              onChange={(e) => setForm({ ...form, adminId: e.target.value })}
-              placeholder="admin123"
-            />
-          </div>
-          <div>
-            <label>Gmail</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="name@gmail.com"
-            />
-          </div>
-        </div>
-        <div>
-          <label>Password</label>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder="••••••"
-            required
-            minLength={6}
-          />
-        </div>
-        <button className="btn" disabled={loading}>{loading ? 'Logging in…' : 'Login'}</button>
-      </form>
-      {error && <p className="error">{error}</p>}
-    </section>
-  );
-}
-
-function AdminSignup({ onSignedUp }) {
-  const [form, setForm] = useState({ adminId: '', email: '', password: '', instituteName: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const me = await apiPost('/admin/signup', form);
-      onSignedUp(me);
-    } catch (e) {
-      setError(parseError(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <section className="card" style={{ maxWidth: 560, margin: '2rem auto' }}>
-      <h2>Create Admin Account</h2>
-      <p className="muted">Use a Gmail address. Password must be at least 6 characters.</p>
-      <form className="form" onSubmit={onSubmit}>
-        <div className="grid-2">
-          <div>
-            <label>Admin ID</label>
-            <input
-              value={form.adminId}
-              onChange={(e) => setForm({ ...form, adminId: e.target.value })}
-              placeholder="admin123"
-              required
-              minLength={3}
-            />
-          </div>
-          <div>
-            <label>Institute Name</label>
-            <input
-              value={form.instituteName}
-              onChange={(e) => setForm({ ...form, instituteName: e.target.value })}
-              placeholder="My College"
-              required
-              minLength={2}
-            />
-          </div>
-        </div>
-        <div className="grid-2">
-          <div>
-            <label>Gmail</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="name@gmail.com"
-              required
-            />
-          </div>
-          <div>
-            <label>Password</label>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="••••••"
-              required
-              minLength={6}
-            />
-          </div>
-        </div>
-        <button className="btn" disabled={loading}>{loading ? 'Creating…' : 'Create Account'}</button>
-      </form>
-      {error && <p className="error">{error}</p>}
-    </section>
-  );
-}
+// We now use dedicated pages for Login and Signup (see src/pages)
 
 function StudentsSection() {
   const [students, setStudents] = useState([]);
@@ -173,13 +41,14 @@ function StudentsSection() {
     try {
       await apiPost('/students', form);
       setForm({ name: '', email: '', studentId: '' });
-      await load();
+      await load(q);
     } catch (e) {
       setError(parseError(e));
     } finally {
       setSubmitting(false);
     }
   };
+
 
   return (
     <section className="card">
@@ -248,7 +117,9 @@ function StudentsSection() {
           <tbody>
             {students.map((s) => (
               <tr key={s._id}>
-                <td>{s.name}</td>
+                <td>
+                  <Link to={`/students/${encodeURIComponent(s.studentId)}`}>{s.name}</Link>
+                </td>
                 <td>{s.email}</td>
                 <td>{s.studentId}</td>
                 <td>{formatDate(s.createdAt)}</td>
@@ -266,6 +137,89 @@ function StudentsSection() {
   );
 }
 
+function StudentDetail() {
+  const { id } = useParams();
+  const [student, setStudent] = useState(null);
+  const [checkins, setCheckins] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const s = await apiGet(`/students/${encodeURIComponent(id)}`);
+      setStudent(s);
+      const qs = [];
+      if (from) qs.push(`from=${from}`);
+      if (to) qs.push(`to=${to}`);
+      const query = qs.length ? `?${qs.join('&')}` : '';
+      const c = await apiGet(`/students/${encodeURIComponent(id)}/checkins${query}`);
+      setCheckins(c);
+    } catch (e) {
+      setError(parseError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <section className="card">
+      <h2>Student Details</h2>
+      {error && <p className="error">{error}</p>}
+      {!student ? (
+        <p className="muted">Loading…</p>
+      ) : (
+        <>
+          <p><strong>Name:</strong> {student.name}</p>
+          <p><strong>Email:</strong> {student.email}</p>
+          <p><strong>Student ID:</strong> {student.studentId}</p>
+          <div className="grid-3" style={{ marginTop: '0.5rem' }}>
+            <div>
+              <label>From (UTC)</label>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div>
+              <label>To (UTC)</label>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            <div className="align-end">
+              <button className="btn" onClick={load}>Apply</button>
+            </div>
+          </div>
+          <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {checkins.map((c) => (
+                  <tr key={c._id}>
+                    <td>{formatDate(c.timestamp)}</td>
+                  </tr>
+                ))}
+                {!loading && checkins.length === 0 && (
+                  <tr>
+                    <td className="muted">No check-ins</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function CheckinsSection() {
   const [checkins, setCheckins] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -274,12 +228,18 @@ function CheckinsSection() {
 
   const [studentId, setStudentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await apiGet('/checkins');
+      const qs = [];
+      if (from) qs.push(`from=${from}`);
+      if (to) qs.push(`to=${to}`);
+      const query = qs.length ? `?${qs.join('&')}` : '';
+      const data = await apiGet(`/checkins${query}`);
       setCheckins(data);
       const today = await apiGet('/checkins/todayCount');
       setTodayCount(today?.count ?? 0);
@@ -316,6 +276,19 @@ function CheckinsSection() {
       <p className="muted" style={{ marginTop: '-0.5rem' }}>
         Total check-ins today: <strong>{todayCount ?? '—'}</strong>
       </p>
+      <div className="grid-3" style={{ marginBottom: '0.75rem' }}>
+        <div>
+          <label>From (UTC)</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div>
+          <label>To (UTC)</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </div>
+        <div className="align-end">
+          <button className="btn" onClick={load}>Apply</button>
+        </div>
+      </div>
       <form className="form" onSubmit={onCheckin}>
         <div className="grid-2">
           <div>
@@ -368,27 +341,22 @@ function CheckinsSection() {
     </section>
   );
 }
+function RequireAuth({ admin, children }) {
+  const location = useLocation();
 
-function parseError(e) {
-  try {
-    const obj = JSON.parse(e.message);
-    if (obj?.message) return obj.message;
-    if (obj?.errors?.length) return obj.errors.map(x => x.msg || x.path).join(', ');
-  } catch (_) {}
-  return e.message || 'Request failed';
-}
+  if (!admin) {
+    // redirect to login but remember where user wanted to go
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
-function formatDate(d) {
-  if (!d) return '';
-  const date = new Date(d);
-  return date.toLocaleString();
+  return children;
 }
 
 export default function App() {
   const [admin, setAdmin] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
-  const [showSignup, setShowSignup] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
@@ -405,11 +373,13 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
 
+  const navigate = useNavigate();
   const logout = async () => {
     try {
       await apiPost('/admin/logout', {});
     } catch (_) {}
     setAdmin(null);
+    navigate('/login');
   };
 
   return (
@@ -417,9 +387,13 @@ export default function App() {
       <header>
         <h1>Student Check-In Dashboard</h1>
         {admin && (
-          <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ marginTop: '0.5rem', display: 'flex', gap: 12, alignItems: 'center' }}>
             <span className="muted">Institute: {admin.instituteName}</span>
-            <button className="btn" style={{ marginLeft: 12 }} onClick={logout}>Logout</button>
+            <nav style={{ display: 'flex', gap: 8 }}>
+              <Link to="/students">Students</Link>
+              <Link to="/checkins">Check-ins</Link>
+            </nav>
+            <button className="btn" onClick={logout}>Logout</button>
           </div>
         )}
       </header>
@@ -427,31 +401,38 @@ export default function App() {
         <main>
           <p className="muted">Checking session…</p>
         </main>
-      ) : !admin ? (
-        <main>
-          {showSignup ? (
-            <>
-              <AdminSignup onSignedUp={setAdmin} />
-              <p className="muted" style={{ textAlign: 'center' }}>
-                Already have an account?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setShowSignup(false); }}>Login</a>
-              </p>
-            </>
-          ) : (
-            <>
-              <AdminLogin onLoggedIn={setAdmin} />
-              <p className="muted" style={{ textAlign: 'center' }}>
-                New here?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setShowSignup(true); }}>Create an account</a>
-              </p>
-            </>
-          )}
-          {authError && <p className="error">{authError}</p>}
-        </main>
       ) : (
-        <main className="grid">
-          <StudentsSection />
-          <CheckinsSection />
+        <main>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route
+              path="/students"
+              element={
+                <RequireAuth admin={admin}>
+                  <div className="grid"><StudentsSection /></div>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/students/:id"
+              element={
+                <RequireAuth admin={admin}>
+                  <StudentDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/checkins"
+              element={
+                <RequireAuth admin={admin}>
+                  <div className="grid"><CheckinsSection /></div>
+                </RequireAuth>
+              }
+            />
+            <Route path="/" element={<Navigate to={admin ? '/students' : '/login'} replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </main>
       )}
       <footer>

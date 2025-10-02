@@ -43,11 +43,31 @@ router.post(
 router.get('/checkins', authRequired, async (req, res, next) => {
   try {
     const institute = req.admin?.instituteName;
-    const checkins = await CheckIn.find()
+    const { from, to } = req.query;
+    let startDate = null;
+    let endDate = null;
+    if (typeof from === 'string' && from) {
+      const d = new Date(from);
+      if (!isNaN(d)) startDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    }
+    if (typeof to === 'string' && to) {
+      const d = new Date(to);
+      if (!isNaN(d)) endDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+    }
+
+    const query = {};
+    if (startDate || endDate) {
+      query.timestamp = {};
+      if (startDate) query.timestamp.$gte = startDate;
+      if (endDate) query.timestamp.$lt = endDate;
+    }
+
+    const checkins = await CheckIn.find(query)
       .sort({ timestamp: -1 })
       .populate({ path: 'student', select: 'name email studentId institute' })
       .lean();
-    const filtered = checkins.filter((c) => c.student && c.student.institute === institute)
+    const filtered = checkins
+      .filter((c) => c.student && c.student.institute === institute)
       .map((c) => ({ ...c, student: { name: c.student.name, email: c.student.email, studentId: c.student.studentId } }));
     res.json(filtered);
   } catch (err) {
