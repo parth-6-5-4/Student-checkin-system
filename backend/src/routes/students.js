@@ -37,7 +37,18 @@ router.post(
 router.get('/', authRequired, async (req, res, next) => {
   try {
     const institute = req.admin?.instituteName;
-    const students = await Student.find({ institute }).lean();
+    const { q } = req.query;
+    const filter = { institute };
+    if (q && typeof q === 'string' && q.trim()) {
+      const regex = new RegExp(q.trim(), 'i');
+      Object.assign(filter, {
+        $or: [
+          { name: regex },
+          { studentId: regex },
+        ],
+      });
+    }
+    const students = await Student.find(filter).lean();
     res.json(students);
   } catch (err) {
     next(err);

@@ -146,12 +146,14 @@ function StudentsSection() {
 
   const [form, setForm] = useState({ name: '', email: '', studentId: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [q, setQ] = useState('');
 
-  const load = async () => {
+  const load = async (query) => {
     setLoading(true);
     setError('');
     try {
-      const data = await apiGet('/students');
+      const qp = query && query.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
+      const data = await apiGet(`/students${qp}`);
       setStudents(data);
     } catch (e) {
       setError(parseError(e));
@@ -161,8 +163,8 @@ function StudentsSection() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    load(q);
+  }, [q]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -182,6 +184,16 @@ function StudentsSection() {
   return (
     <section className="card">
       <h2>Student Management</h2>
+      <div className="grid-2" style={{ marginBottom: '0.75rem' }}>
+        <div>
+          <label>Search</label>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Filter by name or Student ID"
+          />
+        </div>
+      </div>
       <form className="form" onSubmit={onSubmit}>
         <div className="grid-3">
           <div>
@@ -258,6 +270,7 @@ function CheckinsSection() {
   const [checkins, setCheckins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [todayCount, setTodayCount] = useState(null);
 
   const [studentId, setStudentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -268,6 +281,8 @@ function CheckinsSection() {
     try {
       const data = await apiGet('/checkins');
       setCheckins(data);
+      const today = await apiGet('/checkins/todayCount');
+      setTodayCount(today?.count ?? 0);
     } catch (e) {
       setError(parseError(e));
     } finally {
@@ -298,6 +313,9 @@ function CheckinsSection() {
   return (
     <section className="card">
       <h2>Check-in Management</h2>
+      <p className="muted" style={{ marginTop: '-0.5rem' }}>
+        Total check-ins today: <strong>{todayCount ?? '—'}</strong>
+      </p>
       <form className="form" onSubmit={onCheckin}>
         <div className="grid-2">
           <div>
